@@ -33,12 +33,12 @@ jobs:
         shell: bash
         run: |
           set -e
-          RIZIN_SRC="third_party/rizin-src"
+          RIZIN_SRC="/tmp/rizin-src"
           NDK_ROOT="${ANDROID_HOME}/ndk/29.0.14206865"
           ABI="arm64-v8a"
           
           if [ ! -d "$RIZIN_SRC/librz/include" ]; then
-            echo "Cloning Rizin v0.10.0..."
+            echo "Cloning Rizin v0.10.0 to /tmp..."
             rm -rf "$RIZIN_SRC"
             git clone --depth 1 --branch v0.10.0 https://github.com/rizinorg/rizin.git "$RIZIN_SRC"
           fi
