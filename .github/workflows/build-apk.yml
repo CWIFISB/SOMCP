@@ -29,12 +29,7 @@ jobs:
       - name: Install Linux build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build python3-pip
-          pip3 install --user meson
-
-      - name: Clone Rizin source
-        run: |
-          git clone --depth 1 --branch v0.10.0 https://github.com/rizinorg/rizin.git third_party/rizin-src
+          sudo apt-get install -y meson ninja-build
 
       - name: Build Rizin native backend
         run: |
