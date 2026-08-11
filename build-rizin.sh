@@ -10,7 +10,7 @@ NDK_ROOT="${ANDROID_NDK_HOME:-${ANDROID_HOME}/ndk/29.0.14206865}"
 
 if [ ! -d "$RIZIN_SRC/librz/include" ]; then
     echo "[build-rizin] Rizin source not found at '$RIZIN_SRC'. Cloning v0.10.0..."
-    mkdir -p third_party
+    rm -rf "$RIZIN_SRC"
     git clone --depth 1 --branch v0.10.0 https://github.com/rizinorg/rizin.git "$RIZIN_SRC"
 fi
 
@@ -31,6 +31,7 @@ case "$ABI" in
 esac
 
 BUILD_DIR="rizin-build/$ABI"
+rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 # Generate meson cross file
