@@ -6,46 +6,60 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          submodules: recursive
-          fetch-depth: 0
+          submodules: 'recursive'
 
-      - uses: actions/setup-java@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
+          java-version: '17'
+          distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
         with:
-          gradle-version: "9.6.1"
+          packages: 'ndk;29.0.14206865 cmake;3.22.1'
 
-      - uses: android-actions/setup-android@v3
+      - name: Install Linux build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build python3-pip
+          pip3 install --user meson
 
-      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
+      - name: Clone Rizin source
+        run: |
+          git clone --depth 1 --branch v0.10.0 https://github.com/rizinorg/rizin.git third_party/rizin-src
 
-      - name: Build Debug APK (arm64-v8a)
-        run: gradle :app:assembleDebug -Pandroid.targetAbi=arm64-v8a --stacktrace
+      - name: Build Rizin native backend
+        run: |
+          chmod +x build-rizin.sh
+          ./build-rizin.sh arm64-v8a third_party/rizin-src
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
 
-      - name: Upload arm64 Debug APK
+      - name: Build LIEF native backend
+        run: |
+          chmod +x build-lief.sh
+          ./build-lief.sh arm64-v8a
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
+
+      - name: Build Debug APK
+        run: |
+          ./gradlew :app:assembleDebug -PrequireNativeBackends=true
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
+
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: somcp-arm64-debug-apk
-          path: app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
-          retention-days: 30
-          if-no-files-found: error
-
-      - name: Upload universal Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: somcp-universal-debug-apk
-          path: app/build/outputs/apk/debug/app-universal-debug.apk
+          path: app/build/outputs/apk/debug/**/*.apk
           retention-days: 30
           if-no-files-found: warn
