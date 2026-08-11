@@ -27,18 +27,18 @@ jobs:
           packages: 'ndk;29.0.14206865 cmake;3.22.1'
 
       - name: Install Linux build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y meson ninja-build
+        run: sudo apt-get update && sudo apt-get install -y meson ninja-build
 
       - name: Build Rizin native backend
+        shell: bash
         run: |
+          set -e
           RIZIN_SRC="third_party/rizin-src"
           NDK_ROOT="${ANDROID_HOME}/ndk/29.0.14206865"
           ABI="arm64-v8a"
           
           if [ ! -d "$RIZIN_SRC/librz/include" ]; then
-            echo "[build-rizin] Rizin source not found. Cloning v0.10.0..."
+            echo "Cloning Rizin v0.10.0..."
             rm -rf "$RIZIN_SRC"
             git clone --depth 1 --branch v0.10.0 https://github.com/rizinorg/rizin.git "$RIZIN_SRC"
           fi
@@ -50,64 +50,52 @@ jobs:
           rm -rf "$BUILD_DIR"
           mkdir -p "$BUILD_DIR"
           
-          cat > "$BUILD_DIR/cross-$ABI.ini" <<EOF
-          [binaries]
-          c = '$NDK_BIN/${TRIPLE}26-clang'
-          cpp = '$NDK_BIN/${TRIPLE}26-clang++'
-          ar = '$NDK_BIN/llvm-ar'
-          strip = '$NDK_BIN/llvm-strip'
-          ranlib = '$NDK_BIN/llvm-ranlib'
-          ld = '$NDK_BIN/ld.lld'
-          pkg-config = 'false'
+          echo "[binaries]" > "$BUILD_DIR/cross-$ABI.ini"
+          echo "c = '$NDK_BIN/${TRIPLE}26-clang'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "cpp = '$NDK_BIN/${TRIPLE}26-clang++'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "ar = '$NDK_BIN/llvm-ar'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "strip = '$NDK_BIN/llvm-strip'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "ranlib = '$NDK_BIN/llvm-ranlib'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "ld = '$NDK_BIN/ld.lld'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "pkg-config = 'false'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "[host_machine]" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "system = 'android'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "cpu_family = 'aarch64'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "cpu = 'aarch64'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "endian = 'little'" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "[built-in options]" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "c_args = ['-fPIC', '-O2', '-fvisibility=hidden', '-ffunction-sections', '-fdata-sections']" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "cpp_args = ['-fPIC', '-O2', '-fvisibility=hidden', '-ffunction-sections', '-fdata-sections', '-std=c++17', '-fexceptions', '-frtti']" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "c_link_args = ['-Wl,--gc-sections', '-Wl,--icf=safe']" >> "$BUILD_DIR/cross-$ABI.ini"
+          echo "cpp_link_args = ['-Wl,--gc-sections', '-Wl,--icf=safe']" >> "$BUILD_DIR/cross-$ABI.ini"
           
-          [host_machine]
-          system = 'android'
-          cpu_family = 'aarch64'
-          cpu = 'aarch64'
-          endian = 'little'
+          echo "[binaries]" > "$BUILD_DIR/native-$ABI.ini"
+          echo "c = '/usr/bin/gcc'" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "cpp = '/usr/bin/g++'" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "ar = '/usr/bin/ar'" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "ld = '/usr/bin/ld'" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "pkg-config = 'false'" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "[built-in options]" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "c_args = ['-O2']" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "cpp_args = ['-O2', '-std=c++17']" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "c_std = 'c11'" >> "$BUILD_DIR/native-$ABI.ini"
+          echo "cpp_std = 'c++17'" >> "$BUILD_DIR/native-$ABI.ini"
           
-          [built-in options]
-          c_args = ['-fPIC', '-O2', '-fvisibility=hidden', '-ffunction-sections', '-fdata-sections']
-          cpp_args = ['-fPIC', '-O2', '-fvisibility=hidden', '-ffunction-sections', '-fdata-sections', '-std=c++17', '-fexceptions', '-frtti']
-          c_link_args = ['-Wl,--gc-sections', '-Wl,--icf=safe']
-          cpp_link_args = ['-Wl,--gc-sections', '-Wl,--icf=safe']
-          EOF
+          echo "meson setup $BUILD_DIR ..."
+          meson setup "$BUILD_DIR" "$RIZIN_SRC" --cross-file "$BUILD_DIR/cross-$ABI.ini" --native-file "$BUILD_DIR/native-$ABI.ini" -Dblob=true -Dstatic_runtime=true --default-library static -Duse_sys_capstone=disabled -Ddebugger=false -Dsubprojects_check=false
           
-          cat > "$BUILD_DIR/native-$ABI.ini" <<EOF
-          [binaries]
-          c = '/usr/bin/gcc'
-          cpp = '/usr/bin/g++'
-          ar = '/usr/bin/ar'
-          ld = '/usr/bin/ld'
-          pkg-config = 'false'
-          
-          [built-in options]
-          c_args = ['-O2']
-          cpp_args = ['-O2', '-std=c++17']
-          c_std = 'c11'
-          cpp_std = 'c++17'
-          EOF
-          
-          echo "[build-rizin] meson setup $BUILD_DIR ..."
-          meson setup "$BUILD_DIR" "$RIZIN_SRC" \
-              --cross-file "$BUILD_DIR/cross-$ABI.ini" \
-              --native-file "$BUILD_DIR/native-$ABI.ini" \
-              -Dblob=true \
-              -Dstatic_runtime=true \
-              --default-library static \
-              -Duse_sys_capstone=disabled \
-              -Ddebugger=false \
-              -Dsubprojects_check=false
-          
-          echo "[build-rizin] meson compile ..."
+          echo "meson compile ..."
           meson compile -C "$BUILD_DIR"
-          
-          echo "[build-rizin] DONE - $ABI archives at $BUILD_DIR"
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
 
       - name: Build LIEF native backend
+        shell: bash
         run: |
+          set -e
           NDK_ROOT="${ANDROID_HOME}/ndk/29.0.14206865"
           ABI="arm64-v8a"
           SRC_DIR="third_party/lief-src"
@@ -115,43 +103,22 @@ jobs:
           TOOLCHAIN="$NDK_ROOT/build/cmake/android.toolchain.cmake"
           
           if [ ! -d "$SRC_DIR" ]; then
-            echo "[build-lief] LIEF source not found. Run 'git submodule update --init third_party/lief-src'"
+            echo "LIEF source not found"
             exit 1
           fi
           
           rm -rf "$BUILD_DIR"
           mkdir -p "$BUILD_DIR"
           
-          echo "[build-lief] CMake configure for $ABI ..."
-          cmake -G "Ninja" \
-            -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-            -DANDROID_ABI="$ABI" \
-            -DANDROID_PLATFORM=android-26 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLIEF_TESTS=OFF -DLIEF_EXAMPLES=OFF -DLIEF_DOC=OFF \
-            -DLIEF_PYTHON_API=OFF -DLIEF_RUST_API=OFF -DLIEF_C_API=ON \
-            -DLIEF_ELF=ON -DLIEF_PE=ON -DLIEF_MACHO=ON -DLIEF_DEX=ON \
-            -DLIEF_ART=ON -DLIEF_OAT=ON -DLIEF_VDEX=ON \
-            -DLIEF_DEBUG_INFO=OFF -DLIEF_OBJC=OFF -DLIEF_DYLD_SHARED_CACHE=OFF \
-            -DLIEF_ASM=OFF -DLIEF_LOGGING=ON -DLIEF_ENABLE_JSON=ON \
-            -DLIEF_USE_CCACHE=OFF -DLIEF_DISABLE_FROZEN=ON \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DCMAKE_INSTALL_PREFIX="$BUILD_DIR" \
-            -B "$BUILD_DIR" -S "$SRC_DIR"
+          cmake -G "Ninja" -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-26 -DCMAKE_BUILD_TYPE=Release -DLIEF_TESTS=OFF -DLIEF_EXAMPLES=OFF -DLIEF_DOC=OFF -DLIEF_PYTHON_API=OFF -DLIEF_RUST_API=OFF -DLIEF_C_API=ON -DLIEF_ELF=ON -DLIEF_PE=ON -DLIEF_MACHO=ON -DLIEF_DEX=ON -DLIEF_ART=ON -DLIEF_OAT=ON -DLIEF_VDEX=ON -DLIEF_DEBUG_INFO=OFF -DLIEF_OBJC=OFF -DLIEF_DYLD_SHARED_CACHE=OFF -DLIEF_ASM=OFF -DLIEF_LOGGING=ON -DLIEF_ENABLE_JSON=ON -DLIEF_USE_CCACHE=OFF -DLIEF_DISABLE_FROZEN=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX="$BUILD_DIR" -B "$BUILD_DIR" -S "$SRC_DIR"
           
-          echo "[build-lief] Building LIEF for $ABI ..."
           cmake --build "$BUILD_DIR" --parallel 4
-          
-          echo "[build-lief] Installing LIEF for $ABI ..."
           cmake --install "$BUILD_DIR"
-          
-          echo "[build-lief] DONE - $ABI"
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
 
       - name: Build Debug APK
-        run: |
-          ./gradlew :app:assembleDebug -PrequireNativeBackends=true
+        run: ./gradlew :app:assembleDebug -PrequireNativeBackends=true
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.14206865
 
