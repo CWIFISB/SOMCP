@@ -192,16 +192,33 @@ class ApkMcpBridge(private val settings: SettingsStore) {
                 .put("params", params)
                 .toString()
             val builder = Request.Builder().url(url).post(body.toRequestBody("application/json".toMediaType()))
+                .safeHeader("Accept", "application/json, text/event-stream")
             if (token.isNotBlank()) builder.safeHeader("Authorization", "Bearer $token")
             return builder.build()
         }
 
         private fun post(req: Request): String {
             client.newCall(req).execute().use { r ->
+                val contentType = r.header("Content-Type") ?: ""
                 val body = r.body?.string().orEmpty()
                 if (!r.isSuccessful) throw IllegalStateException("HTTP ${r.code}")
+                if (contentType.contains("text/event-stream", ignoreCase = true)) {
+                    return parseSseBody(body)
+                }
                 return body
             }
+        }
+
+        private fun parseSseBody(body: String): String {
+            val sb = StringBuilder()
+            for (line in body.lines()) {
+                val trimmed = line.trim()
+                if (trimmed.startsWith("data:")) {
+                    sb.append(trimmed.substring(5).trim())
+                }
+            }
+            val parsed = sb.toString()
+            return parsed.ifEmpty { body }
         }
 
         private fun parseTools(body: String): List<ToolDef> {
